@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/d3-axis@3"></script>
+
+    <title>Heat Map</title>
+
+</head>
+
+
+
+
+
+
+<style>
+
+    body{
+        background-color: hsl(41, 64%, 55%);
+    }
+    .bar:hover {
+        fill: hsl(49, 64%, 43%);
+        color: rgb(255, 231, 231)
+    }
+
+
+    .tooltip {
+
+        position: absolute;
+        text-align: center;
+        width: 145px;
+        height: 50px;
+        padding: 2px;
+        font: 19px sans-serif;
+        background: lightsteelblue;
+        color: black;
+        border: 0px;
+        border-radius: 8px;
+        pointer-events: none;
+    }
+</style>
+
+<body>
+    <title id="title">Evolution of the United States GDP</title>
+    <title id="description">1753 - 2015: base temperature 8.66℃</title>
+
+    <svg id="graph" width="900" height="460" viewBox="-95 -15 900 460"></svg>
+    <div class="legend"></div>
+    <script>
+
+
+        var data_url = "https://raw.githubusercontent.com/freeCodeCamp/ProjectReferenceData/master/global-temperature.json"
+
+
+        function getData() {
+            return new Promise((resolve, reject) => {
+                fetch(data_url)
+                    .then(response => {
+                        return response.json();
+                    }).then(data_from_fetched => {
+                        let numberedMonthData = data_from_fetched;
+
+                        console.log(numberedMonthData)
+                        resolve(numberedMonthData);
+
+
+
+                    })
+            }
+            )
+        }
+
+        getData().then(numberedMonthData => {
+
+            let namedMonthData = JSON.parse(JSON.stringify(numberedMonthData))
+
+
+            function bandClassifier(val, multiplier) {
+                //triangle movement logic
+                if (val >= 0) {
+                    return (Math.floor((val * multiplier) / (.33 * multiplier)) + 1) > 3 ? 3 : Math.floor((val * multiplier) / (.33 * multiplier)) + 1
+                }
+                else {
+                    return (Math.floor((val * multiplier) / (.33 * multiplier))) < -3 ? -3 : Math.floor((val * multiplier) / (.33 * multiplier))
+                }
+            }
+
+
+            callout = (g, value , year) => {
+                if (!value) return g.style("visibility", "hidden");
+
+                g
+                    .style("visibility", null)
+                    .style("pointer-events", "none")
+                    .style("font", "10px sans-serif")
+                    .attr("id", "tooltip")
+                    .attr("data-year", year);
+                const path = g.selectAll("path")
+                    .data([null])
+                    .join("path")
+                    .attr("fill", "white")
+                    .attr("stroke", "black")
+                    
+
+
+                const text = g.selectAll("text")
+                    .data([null])
+                    .join("text")
+                    .call(text => text
+                        .selectAll("tspan")
+                        .data((value + "").split(/\n/))
+                        .join("tspan")
+                        .attr("x", 0)
+                        .attr("y", (d, i) => `${i * 1.1}em`)
+                        .style("font-weight", (_, i) => i ? null : "bold")
+                        .text(d => d));
+
+                const { x, y, width: w, height: h } = text.node().getBBox();
+
+                text.attr("transform", `translate(${-w / 2},${15 - y})`);
+                path.attr("d", `M${-w / 2 - 10},5H-5l5,-5l5,5H${w / 2 + 10}v${h + 20}h-${w + 20}z`)
+                    ;
+            }
+
+            const padding = 0;
+            let svg = d3.select("#graph")
+            const margin = { top: 50, right: 0, bottom: 30, left: 60 },
+
+                width = +svg.attr("width") - margin.left - margin.right,
+                height = +svg.attr("height") - margin.top - margin.bottom;
+
+            svg.append("svg")
+                .attr("width", width + margin.left + margin.right)
+                .attr("height", height + margin.top + margin.bottom)
+                .append("g")
+
+            //           data.data.map(d => {  d[0] =format(toDate(d[0]))}); 
+
+
+
+
+            let xScale = d3.scaleTime().range([0, width]);
+            console.log(numberedMonthData.monthlyVariance)
+
+            xScale.domain(d3.extent(numberedMonthData.monthlyVariance, function (d) { return new Date(parseInt(d.year), 0) }));
+
+            let month = ["January", "February", "March", "April", "May",
+                "June", "July", "August", "September", "October", "November", "December"]
+            let yScale = d3.scaleOrdinal()
+                .range(Array.from(new Array(12), (x, i) => i * (height / 12)))
+
+
+            yScale.domain(month);
+
+
+
+
+
+            var yearsFormatter = d3.timeFormat("%Y")
+
+            svg.append("g")
+                .attr("transform", "translate(-22," + height + ")")
+                .attr("id", "x-axis")
+                .call(d3.axisBottom(xScale));
+
+
+
+
+            // add the y Axis
+            svg.append("g")
+
+                .attr("transform", `translate(${margin.left - 84},15)`)
+                .attr("id", "y-axis")
+                .call(d3.axisLeft(yScale).ticks())
+                .call(g => g.select(".domain").remove())
+                .call(g => g.append("text")
+                    .attr("x", -margin.left)
+                    .attr("y", 35)
+                    .attr("font-size", "1.5em")
+                    .attr("fill", "currentColor")
+                    .attr("text-anchor", "start")
+                    .attr("transform", "rotate(-90)")
+
+                )
+
+
+
+
+
+
+            namedMonthData.monthlyVariance.forEach(element => {
+                element.month = month[element.month]
+
+            });
+
+
+
+
+            let gridSize = width / (namedMonthData.monthlyVariance.length / 12)
+
+
+            let baseTemp = numberedMonthData.baseTemperature
+
+            let color = d3.scaleDiverging(
+                [(d3.max(numberedMonthData.monthlyVariance, (d) => baseTemp + d.variance))
+                    , numberedMonthData.baseTemperature,
+                (d3.min(numberedMonthData.monthlyVariance, (d) => baseTemp + d.variance))], d3.interpolateRdBu)
+
+
+
+            svg.selectAll(".cell")
+                .data(numberedMonthData.monthlyVariance)
+                .enter()
+                .append("rect")
+                .attr("class", "cell")
+                .attr("x", function (d) { return (d.year - 1760) * gridSize; })
+                .attr("y", function (d) { return (d.month - 1) * height / 12; })
+                .attr("data-month", (d) => d.month - 1)
+                .attr("data-year", (d) => d.year)
+                .attr("data-temp", (d) => baseTemp + d.variance)
+                .attr("width", gridSize)
+                .attr("height", height / 12)
+                .attr("fill", (d) => color(baseTemp + d.variance))
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            // adding animated legend
+
+
+            let colorHold = ["hsl(342, 100%, 20%)", "hsl(0, 100%, 59%)", "rgb(255, 231, 231)", "hsl(100, 100%, 100%)", "hsl(221, 42%, 53%)", "hsl(249, 91%, 22%)"]
+            let colorLText = ["< -66%", "-66% to -33%", "-33% to 0%", "0% to 33%", "33% to 66%", "> 66%"]
+
+            colorScale = d3.scaleOrdinal()
+                .domain([-3, -2, -1, 1, 2, 3])
+                .range(colorHold.reverse());
+
+
+
+            var lPatchWidth = 200;
+            let legends = svg.append("svg")
+                .style("stroke", "black")
+                .attr("class", "legends")
+                .attr("id", "legend")
+                .attr("transform", "translate(" + ((width + margin.right) / 2
+                    - lPatchWidth / 2 - margin.left / 4)
+                    + "," + (height + margin.bottom + 5) + ")");
+
+            // Legend triangle pointer generator
+            var symbolGenerator = d3
+                .symbol()
+                .type(d3.symbolTriangle)
+                .size(64);
+
+            legends.append("g")
+                .attr("transform", "rotate(180)")
+                .append("g")
+                .attr("class", "trianglepointer")
+                .attr("transform", "translate(" + (-lPatchWidth / colorScale.range().length) / 2 + ")")
+                .append("path").attr("d", symbolGenerator());
+            //Legend Rectangels
+            legends.append("g")
+                .attr("class", "LegRect")
+                .attr("transform", "translate(0," + 5 + ")")
+                .selectAll("rect")
+                .data(colorScale.range())
+                .enter()
+                .append("rect")
+                .attr("width", lPatchWidth / colorScale
+                    .range().length + "px")
+                .attr("height", "10px")
+                .attr("fill", function (d) { return d })
+                .attr("x", function (d, i) { return i * (lPatchWidth / colorScale.range().length) })
+
+            // legend text
+            legends.append("g")
+                .attr("class", "LegText")
+                .attr("transform", "translate(0,28)")
+                .append("text")
+                .attr("x", lPatchWidth / 2)
+                .attr('font-weight', 'normal')
+                .style("text-anchor", "middle")
+                .text()
+
+                function mean(arr){
+                   return arr.reduce(function(acc,prev){
+                    return acc+prev;
+                       })/arr.length;
+    }
+               varianceMean= mean(numberedMonthData.monthlyVariance.map(function(d){return +d.variance}))
+         
+                numberedMonthData.monthlyVariance.forEach(function (d) {
+                d.perChange = (varianceMean - d.variance) / varianceMean
+            })
+            console.log(varianceMean)
+            // tooltip
+            const tooltip = svg.append("g")
+                               
+
+            svg
+                .selectAll(".cell")
+
+              
+
+                .on("touchmove mousemove", function (event, d) {
+                    tooltip.call(
+                        callout,
+                        `${month[d.month]},${d.year}
+                         ${+numberedMonthData.baseTemperature + (~~d.variance)}°C,  ${d.variance}°C`,d.year
+                    );
+                    tooltip.attr("transform", `translate(${d3.pointer(event, this)})`)
+
+                    d3.select(this)
+                      .attr("stroke", "red")
+                      
+                    d3.select(".trianglepointer").transition()
+                      .delay(100).attr("transform", "translate(" + (-((lPatchWidth /
+            colorScale.range().length) / 2 + (colorScale
+                      .domain().indexOf(bandClassifier((d.perChange), 100)) * (lPatchWidth /
+                                    colorScale.range().length)))) + ",0)");
+                   
+
+                        d3.select(".LegText")
+                        .select("text")
+                        .text(Math.round((baseTemp + d.variance) * 100) / 100 +"C°")
+                
+                })
+                .on("touchend mouseleave", function () {
+                    tooltip.call(callout, null);
+                    d3.select(this)
+                        .attr("stroke", null)
+                        .lower();
+                });
+
+
+
+        })
+    </script>
+    <script src="https://cdn.freecodecamp.org/testable-projects-fcc/v1/bundle.js"></script>
+</body>
+
+</html>
